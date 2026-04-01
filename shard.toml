@@ -1,0 +1,11 @@
+[server]
+listen = "127.0.0.1:8080"
+
+[cache]
+l1_memory_mb = 2048
+l2_path = "/var/lib/shard"
+default_ttl_seconds = 3600
+l2_ttl_seconds = 86400
+
+[backend]
+url = "http://127.0.0.1:8081"
