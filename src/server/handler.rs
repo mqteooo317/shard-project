@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use hyper::{body::Incoming, Request, Response, StatusCode};
-use http_body_util::{BodyExt, Full, Empty};
+use http_body_util::{BodyExt, Full};
 use bytes::Bytes;
 use crate::cache::multi_level::MultiLevelCache;
-use crate::fragment::{BoundaryDetector, FragmentStore, Merger, TemplateCache, DependencyGraph};
+use crate::fragment::{BoundaryDetector, FragmentStore, Merger, TemplateCache, DependencyGraph, Placeholder, Fragment};
 use crate::backend::pool::BackendPool;
 use crate::server::router::Router;
 use crate::config::Config;
@@ -48,15 +48,14 @@ impl Handler {
 
         // 1. Check if cacheable
         if !self.router.is_cacheable(&uri, method, req.headers()) {
-            // Not cacheable -> proxy directly
             return self.proxy_backend(req).await;
         }
 
-        // 2. Try to get from cache (full page or fragments)
+        // 2. Try to get from cache (full page)
         let cache_key = self.router.cache_key(&uri, method);
         if let Some(key) = cache_key {
-            if let Some(cached_body) = self.cache.get(&key.to_string()).await {
-                // Full page hit
+            let key_str = key.to_string();
+            if let Some(cached_body) = self.cache.get(&key_str).await {
                 let response = Response::builder()
                     .status(StatusCode::OK)
                     .header("X-Shard", "hit")
@@ -80,7 +79,9 @@ impl Handler {
 
         if is_html && parts.status == StatusCode::OK {
             let html = String::from_utf8_lossy(&body_bytes);
-            self.store_fragments(&uri, &html).await;
+            if let Some(key) = cache_key {
+                self.store_fragments(&key.to_string(), &html).await;
+            }
         }
 
         // 5. Store full page in cache
@@ -93,8 +94,8 @@ impl Handler {
     }
 
     async fn proxy_backend(&self, req: Request<Incoming>) -> Result<Response<Full<Bytes>>, hyper::Error> {
-        let client = hyper::client::Client::new();
-        let backend_uri = format!("{}{}", self.config.backend.url, req.uri().path());
+        let client = self.backend_pool.client();
+        let backend_uri = format!("{}{}", self.backend_pool.base_url(), req.uri().path());
         let backend_req = Request::builder()
             .method(req.method())
             .uri(backend_uri)
@@ -110,17 +111,23 @@ impl Handler {
         let mut detector = BoundaryDetector::new();
         let candidates = detector.detect(html);
         let mut fragments = Vec::new();
+        let mut replacements = Vec::new(); // (original_content, placeholder)
 
         for cand in candidates {
-            let fragment = crate::fragment::types::Fragment::new(cand.id.clone(), cand.content);
+            let fragment = Fragment::new(cand.id.clone(), cand.content.clone());
             self.fragment_store.set(cand.id.clone(), fragment.clone());
             fragments.push(fragment);
-            self.dependency_graph.add_dependency(url.to_string(), cand.id);
+            self.dependency_graph.add_dependency(url.to_string(), cand.id.clone());
+
+            let placeholder = Placeholder::new(&cand.id);
+            replacements.push((cand.content, placeholder));
         }
 
-        // Create template with placeholders and store in template cache
-        let placeholders: Vec<_> = fragments.iter().map(|f| crate::fragment::Placeholder::new(&f.id)).collect();
-        let template = crate::fragment::Merger::create_template(html, &placeholders);
+        // Build template by replacing each fragment content with its placeholder marker
+        let mut template = html.to_string();
+        for (content, placeholder) in replacements {
+            template = template.replace(&content, &placeholder.to_marker());
+        }
         self.template_cache.set(url.to_string(), template);
     }
 }

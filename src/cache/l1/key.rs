@@ -1,39 +1,14 @@
-use std::hash::{Hash, Hasher};
+use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CacheKey {
-    pub url: String,
-    pub fragment_id: Option<String>,
-    pub variant: Option<String>,
-}
-
-impl CacheKey {
-    pub fn new(url: String) -> Self {
-        Self {
-            url,
-            fragment_id: None,
-            variant: None,
+impl fmt::Display for CacheKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.url)?;
+        if let Some(ref frag) = self.fragment_id {
+            write!(f, "#{}", frag)?;
         }
-    }
-
-    pub fn fragment(url: String, fragment_id: String) -> Self {
-        Self {
-            url,
-            fragment_id: Some(fragment_id),
-            variant: None,
+        if let Some(ref variant) = self.variant {
+            write!(f, "@{}", variant)?;
         }
-    }
-
-    pub fn with_variant(mut self, variant: String) -> Self {
-        self.variant = Some(variant);
-        self
-    }
-}
-
-impl Hash for CacheKey {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.url.hash(state);
-        self.fragment_id.hash(state);
-        self.variant.hash(state);
+        Ok(())
     }
 }

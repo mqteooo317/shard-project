@@ -16,18 +16,18 @@ impl MultiLevelCache {
     }
 
     pub async fn get(&self, key: &str) -> Option<Vec<u8>> {
-        if let Some(data) = self.l1.get(key) {
+        if let Some(data) = self.l1.get_str(key) {
             return Some(data);
         }
         if let Some(data) = self.l2.get(key).await {
-            self.l1.set(key.to_string(), data.clone());
+            self.l1.set_str(key, data.clone());
             return Some(data);
         }
         None
     }
 
     pub async fn set(&self, key: &str, value: Vec<u8>) {
-        self.l1.set(key.to_string(), value.clone());
+        self.l1.set_str(key, value.clone());
         self.l2.set(key, value).await;
     }
 }

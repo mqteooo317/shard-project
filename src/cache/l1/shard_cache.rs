@@ -76,6 +76,21 @@ impl ShardCache {
             }
         }
     }
+
+    pub fn get_str(&self, key: &str) -> Option<Vec<u8>> {
+        let cache_key = CacheKey::new(key.to_string());
+        self.get(&cache_key)
+    }
+
+    pub fn set_str(&self, key: &str, value: Vec<u8>) {
+        let cache_key = CacheKey::new(key.to_string());
+        self.set(cache_key, value);
+    }
+
+    pub fn remove_str(&self, key: &str) {
+        let cache_key = CacheKey::new(key.to_string());
+        self.remove(&cache_key);
+    }
 }
 
 impl Clone for ShardCache {
