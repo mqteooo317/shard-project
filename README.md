@@ -1,5 +1,11 @@
 # Shard
 
+---
+
+# ACTUALLY NOT FUNCTIONAL AND FIXING BUGS.
+
+---
+
 Fragment caching proxy for web servers. Built in Rust with assembly optimizations.
 
 Shard intercepts HTTP requests between your web server and backend, caches responses, and intelligently fragments HTML pages to enable granular cache invalidation. This allows hosting providers to significantly increase server density while maintaining performance. The core differentiator is semantic HTML fragmentation, which enables invalidating only the parts of a page that actually change, rather than entire responses.
